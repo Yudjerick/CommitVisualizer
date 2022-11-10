@@ -16,7 +16,7 @@ def decode_tree(path):
     result = ''
     mode = 'text'
     for i in decompressed_content:
-        if i == 0:
+        if i == 0 and mode == 'text':
             mode = 'hex'
             c = 20
             result+=' '
