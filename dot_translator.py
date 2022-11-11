@@ -16,7 +16,7 @@ def decode_tree(path):
     result = ''
     mode = 'text'
     for i in decompressed_content:
-        if i == 0 and mode == 'text':
+        if i == 0:
             mode = 'hex'
             c = 20
             result+=' '
@@ -69,22 +69,16 @@ def get_diff(commithash1,commithash2):
     result = ''
     for i in filenames2:
         if i not in filenames1:
-            result+='+'+i+' '
+            result+='+'+i+'\l'
     for i in filenames1:
         if i not in filenames2:
-            result+='-'+i+' '
+            result+='-'+i+'\l'
     for i in range(len(filenames2)):
         if filenames2[i] in filenames1:
             if(hashes2[i]!=hashes1[filenames1.index(filenames2[i])]):
-                result+='*'+filenames2[i]+' '
+                result+='*'+filenames2[i]+'\l'
 
     return result
-
-path_template = '.git/objects'
-pathes = []
-for i in os.listdir(path_template):
-    for j in os.listdir(path_template + '/' + i):
-        pathes.append(path_template + '/' + i + '/' + j)
 
 log_heads = []
 path_logs = '.git/logs/refs/heads'
@@ -93,37 +87,32 @@ for i in os.listdir(path_logs):
 log_heads.remove('.git/logs/refs/heads/master')
 log_heads.insert(0,'.git/logs/refs/heads/master')
 
+commit_hashes = []
+for i in log_heads:
+    content = open(i).read()
+    lines = content.split('\n')
+    for j in lines:
+        if len(j.split()) > 1:
+            new_commit = j.split()[1]
+            if(new_commit not in commit_hashes):
+                commit_hashes.append(new_commit)
+
 result = 'digraph GitTree{\n'
 
-def print_commits(path):
+def print_commits(hashcode):
     global result
-    compressed_contents = open(path, 'rb').read()
-    try:
-        decompressed_contents = zlib.decompress(compressed_contents).decode(errors='ignore')
-    except:
-        return
-    lines = decompressed_contents.split('\n')
-    
-    if(lines[0].split()[0] == 'commit'):
-        #result+='\tcommit_' + (path.split('/')[-2] + path.split('/')[-1])[:6] + '[comment="' + lines[-2] + '"];\n'
-        if(lines[2].split()[0] == 'parent'):
-            result += '\tcommit_' + (path.split('/')[-2] + path.split('/')[-1])[:6]  + ' -> ' + 'commit_' +(lines[2].split()[1])[:6] 
-            try:
-                result += ' [label="' + get_diff(lines[1].split()[1], path.split('/')[-2] + path.split('/')[-1]) +'"];\n'
-            except Exception as e:
-                #print(str(e))
-                result += ';\n'
-        if(lines[1].split()[0] == 'parent'):
-            result += '\tcommit_' + (path.split('/')[-2] + path.split('/')[-1])[:6]  + ' -> ' + 'commit_' +(lines[1].split()[1])[:6]
-            try:
-                result += ' [label="' + get_diff(lines[1].split()[1], path.split('/')[-2] + path.split('/')[-1]) +'"];\n'
-            except Exception as e:
-                print(str(e))
-                print(lines[1].split()[1])
-                print(path.split('/')[-2] + path.split('/')[-1])
-                result += ';\n'
+    decompressed_content = parse_commit(hashcode)
+    lines = decompressed_content.split('\n')
+    lines.pop(0)
 
-for i in pathes:
+    if(lines[2].split()[0] == 'parent'):
+        result += '\tcommit_' +(lines[2].split()[1])[:6] + ' -> '+'commit_' + hashcode[:6]  
+        result += ' [label="' + get_diff(lines[2].split()[1], hashcode) +'"];\n'
+    if(lines[1].split()[0] == 'parent'):
+        result += '\tcommit_' +  (lines[1].split()[1])[:6] + ' -> ' + 'commit_' + hashcode[:6]
+        result += ' [label="' + get_diff(lines[1].split()[1], hashcode) +'"];\n'
+
+for i in commit_hashes:
     print_commits(i)
 
 def print_branches(path):
@@ -140,6 +129,10 @@ def print_branches(path):
 
 for i in log_heads:
     print_branches(i)
+
+head = open('.git/logs/HEAD').readlines()[-1].split()[1]
+result += '\tHEAD [shape=rect];\n'
+result += '\tHEAD -> commit_' + head[:6] + '[style=dashed];\n'
 
 result+='}'
 print(result)
